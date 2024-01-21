@@ -1,0 +1,17 @@
+FROM golang:windowsservercore as builder
+
+WORKDIR c:/go/src/app
+COPY . .
+
+# Set a new PATH environment variable
+# RUN setx /M PATH "c:\go\src\app\make-win\;%PATH%"
+# RUN setx path "%path%;c:\go\src\app\make-win"
+RUN setx /M PATH $($Env:PATH + ';c:\go\src\app\make-win')
+ARG TARGETARCH
+RUN make windows TARGETARCH=$TARGETARCH
+
+FROM mcr.microsoft.com/windows/nanoserver:20H2-KB5016616
+WORKDIR c:/app
+
+COPY --from=builder c:/go/src/app/ .
+CMD ["telegram_bot.exe", "start"]
