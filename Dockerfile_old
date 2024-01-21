@@ -1,0 +1,43 @@
+FROM golang:1.20-nanoserver as builder
+
+# Define the version of PowerShell you wish to install
+ENV POWERSHELL_VERSION=7.4.0
+
+WORKDIR /Download
+
+# Download the PowerShell package from the GitHub releases page
+ADD https://github.com/PowerShell/PowerShell/releases/download/v$POWERSHELL_VERSION/PowerShell-$POWERSHELL_VERSION-win-x64.zip ./powershell.zip
+
+# Use tar to unzip the PowerShell package
+RUN tar -xf .\powershell.zip -C .
+
+# Use PowerShell to expand the zip file
+#SHELL ["powershell", "-Command"]
+#RUN Expand-Archive -Path "PowerShell-$ENV:POWERSHELL_VERSION-win-x64.zip" -DestinationPath "."
+
+# Optionally, you can remove the zip file after extraction if you want to reduce the image size
+RUN del powerShell.zip
+
+# Set the path to the PowerShell executable
+ENV PATH="C:\PowerShell-$POWERSHELL_VERSION-win-x64;${PATH}"
+
+# Use PowerShell for the subsequent commands
+SHELL ["pwsh", "-Command"]
+
+# Install Chocolatey
+RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
+    Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'));
+
+# Install make using Chocolatey
+RUN choco install make -y;
+
+WORKDIR /go/src/app
+COPY . .
+RUN make windows
+
+FROM scratch
+WORKDIR /
+COPY --from=builder /go/src/app/telegram_bot*.* .
+COPY --from=alpine:latest /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+ENTRYPOINT [".\telegram_bot.exe"]

@@ -1,0 +1,34 @@
+ARG TARGETARCH
+ARG TARGETOS
+
+
+#Linux
+FROM quay.io/projectquay/golang:1.20 as linuxbuilder
+
+WORKDIR /go/src/app
+COPY . .
+RUN make linux TARGETARCH=$TARGETARCH
+
+FROM scratch as linuxbase
+WORKDIR /
+COPY --from=builder /go/src/app/kbot .
+COPY --from=alpine:latest /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+ENTRYPOINT ["./telegram_bot", "start"]
+
+#Windows
+FROM golang:windowsservercore as windowsbuilder
+
+WORKDIR c:/go/src/app
+COPY . .
+
+RUN setx /M PATH $($Env:PATH + ';c:\go\src\app\make-win')
+RUN make windows TARGETARCH=$TARGETARCH
+
+FROM mcr.microsoft.com/windows/nanoserver:20H2-KB5016616 as windowsbase
+WORKDIR c:/app
+
+COPY --from=windowsbuilder c:/go/src/app/ .
+CMD ["telegram_bot.exe", "start"]
+
+# Conditional final stage based on targetos
+FROM ${TARGETOS}base
